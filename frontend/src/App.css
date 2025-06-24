@@ -1,0 +1,12 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+    --color-primary-green-100: #87D5C9;
+    --color-primary-green-200: #4FAA9C;
+    --color-primary-green-300: #268072;
+    --color-primary-green-400: #0C5743;
+    --color-primary-green-500: #0B554A;
+    --color-primary-green-600: #00332B;
+}
