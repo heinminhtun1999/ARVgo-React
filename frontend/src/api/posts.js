@@ -4,11 +4,7 @@ const axios = instance;
 
 export const createPost = async (data) => {
     try {
-        const response = await axios.post("/posts", data)
-
-        // Check if the response is successful
-        if (response && response.status != 200) throw error.response
-
+        const response = await axios.post("/posts", data);
         return response
     } catch (error) {
         throw error.response || {

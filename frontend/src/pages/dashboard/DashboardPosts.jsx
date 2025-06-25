@@ -8,7 +8,7 @@ import AddPostOverlay from '../../components/dashboard/AddPostOverlay.jsx';
 function DashboardPosts() {
 
     const [showAddOverlay, setShowAddOverlay] = useState(true);
-    const [editorDraft, setEditorDraft] = useState({ title: "", content: "", media: [], eventDate: "" });
+    const [editorDraft, setEditorDraft] = useState({ title: "", content: "", media: { image: [], video: [] }, eventDate: "" });
 
     return (
 
