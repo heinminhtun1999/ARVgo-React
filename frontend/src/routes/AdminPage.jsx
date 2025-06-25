@@ -32,7 +32,7 @@ function AdminPage() {
                         <img src={ARVgoLogo2} alt="arvgoLogo" className="w-full h-full overflow-hidden" />
                     </a>
                     {/*Current pathname*/}
-                    <h2 className="ms-auto md:ms-0 font-bold text-neutral-500">{pathname.toUpperCase()}</h2>
+                    <h2 className="ms-auto md:ms-0 font-bold text-neutral-500">{pathname ? pathname.toUpperCase() : "Home"}</h2>
                 </div>
             </header>
             {/*Main Outer Div*/}
