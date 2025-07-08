@@ -3,10 +3,70 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
+    --color-primary-green-50: #E8F7F3;
     --color-primary-green-100: #87D5C9;
     --color-primary-green-200: #4FAA9C;
     --color-primary-green-300: #268072;
     --color-primary-green-400: #0C5743;
     --color-primary-green-500: #0B554A;
     --color-primary-green-600: #00332B;
+}
+
+.glass {
+    position: relative;
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(2px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.8);
+    border-radius: 2rem;
+    box-shadow: 0 8px 32px rgba(31, 38, 135, 0.2),
+        inset 0 4px 20px rgba(255, 255, 255, 0.3);
+}
+
+.glass::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2rem;
+    backdrop-filter: blur(1px);
+    box-shadow: inset -10px -8px 0px -11px rgba(255, 255, 255, 1),
+        inset 0px -9px 0px -8px rgba(255, 255, 255, 1);
+    opacity: 0.6;
+    z-index: -1;
+    filter: blur(1px) drop-shadow(10px 4px 6px black) brightness(115%);
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes fadeOut {
+    from {
+        opacity: 1;
+    }
+
+    to {
+        opacity: 0;
+    }
 }

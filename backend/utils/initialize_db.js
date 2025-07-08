@@ -11,8 +11,8 @@ async function initializeDB(sql) {
         await sql`CREATE TABLE IF NOT EXISTS posts
                   (
                       id SERIAL PRIMARY KEY,
-                      title TEXT NOT NULL,
-                      content TEXT NOT NULL,
+                      title TEXT NOT NULL CHECK (char_length(title) > 0),
+                      content TEXT NOT NULL CHECK (char_length(content) > 0),
                       event_date TIMESTAMP,
                       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                       updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -22,8 +22,8 @@ async function initializeDB(sql) {
 
         await sql`CREATE TABLE IF NOT EXISTS images 
               (
-                  id   SERIAL PRIMARY KEY,
-                  url  TEXT NOT NULL,
+                  id SERIAL PRIMARY KEY,
+                  url TEXT NOT NULL,
                   album_id INTEGER,
                   post_id INTEGER,
                   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -35,7 +35,7 @@ async function initializeDB(sql) {
               (
                   id SERIAL PRIMARY KEY,
                   title TEXT NOT NULL,
-                  description TEXT NOT NULL,
+                  description TEXT,
                   url  TEXT NOT NULL,
                   album_id INTEGER,
                   post_id INTEGER,

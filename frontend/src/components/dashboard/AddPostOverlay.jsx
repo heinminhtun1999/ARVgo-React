@@ -1,69 +1,48 @@
 // React 
 import { useEffect, useState } from 'react';
 
-// Rich Text Editor Component for Adding Posts
-import Quill from 'quill';
-import "quill/dist/quill.snow.css";
-
 // Components
 import PrimaryButton from './Buttons/PrimaryButton.jsx';
 import SecondaryButton from './Buttons/SecondaryButton.jsx';
+import DatePicker from './DatePicker.jsx';
+import TextInput from './TextInput.jsx';
+import QuillEditor from './QuillEditor.jsx';
+import { FaMinus } from "react-icons/fa";
 
 // API
 import { createPost } from '../../api/posts.js';
+import { getAllAlbums } from '../../api/albums.js';
 
-const toolbarOptions = [
-    [{ font: [] }, { size: [] }], // custom dropdown
-    [{ header: [1, 2, 3, 4, 5] }],
-    ['bold', 'italic', 'underline', 'strike', { script: 'sub' }, { script: 'super' }, 'link', 'blockquote', { 'list': 'ordered' }, { 'list': 'bullet' }, { 'list': 'check' }],// toggled buttons
-    [{ color: [] }, { align: [] }], // dropdown with defaults from theme,
-    ['clean'], // remove formatting button
-];
 
-function AddPostOverlay({ setShowAddPanel, editorDraft, setEditorDraft }) {
+function AddPostOverlay({ setShowAddPanel, editorDraft, setEditorDraft, setError }) {
 
-    const [quill, setQuill] = useState(null);
-    const [inputError, setInputError] = useState({ title: "", content: "", eventDate: "", media: "" });
+    const [inputError, setInputError] = useState({ title: "", content: "", eventDate: "", media: "", album: "" });
+    const [albums, setAlbums] = useState([]);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
 
-        // Check if Quill editor is already initialized to prevent multiple instances
-        if (document.querySelector('.ql-toolbar')) {
-            const toolbar = document.querySelector('.ql-toolbar');
-            toolbar.classList.add('w-full')
-            return;
-        };
-
-        //  Quill Editor Options
-        const options = {
-            placeholder: 'Compose an epic...',
-            theme: 'snow',
-            modules: {
-                toolbar: toolbarOptions,
+        // Get Albums
+        async function getAlbums() {
+            setLoading(true);
+            try {
+                const response = await getAllAlbums();
+                setAlbums(response.data.data);
+            } catch (error) {
+                console.error("[INFO] Error fetching albums:", error);
+                setInputError(prev => ({
+                    ...prev,
+                    album: "Error fetching albums. Create new album from title name or try again."
+                }))
             }
-        };
-
-        // Initialize Quill editor
-        const quill = new Quill('#editor', options)
-
-        setQuill(quill); // Set the quill instance in state
-
-        // Set initial content if editorDraft is provided
-        if (editorDraft) {
-            quill.root.innerHTML = editorDraft.content;
+            setLoading(false);
         }
+        getAlbums();
 
-        quill.on('text-change', function () {
-            // Handle text change event
-            setEditorDraft(prev => ({
-                ...prev,
-                content: quill.getSemanticHTML().trim()
-            }));
-        });
     }, [])
 
 
-    // Handle Title and Date Change
+    // Handle Title, Date and Album Change
     const handleTitleChange = (e) => {
         const title = e.target.value;
         setEditorDraft(prev => ({
@@ -77,6 +56,14 @@ function AddPostOverlay({ setShowAddPanel, editorDraft, setEditorDraft }) {
         setEditorDraft(prev => ({
             ...prev,
             eventDate: eventDate
+        }));
+    }
+
+    const handleAlbumChange = (e) => {
+        const album = e.target.value;
+        setEditorDraft(prev => ({
+            ...prev,
+            album: album
         }));
     }
 
@@ -135,10 +122,45 @@ function AddPostOverlay({ setShowAddPanel, editorDraft, setEditorDraft }) {
         }
     }
 
+    // Handle Remove Media
+    const handleRemoveMedia = (type, index) => {
+        setEditorDraft(prev => {
+            const updatedMedia = {
+                image: [...prev.media.image],
+                video: [...prev.media.video]
+            };
+            if (type == "image") {
+                updatedMedia.image.splice(index, 1);
+            } else if (type == "video") {
+                updatedMedia.video.splice(index, 1);
+            }
+            return {
+                ...prev,
+                media: updatedMedia
+            }
+        })
+    }
+
     // Handle Post Submission
     const handlePostSubmission = async () => {
-        console.log("Submitting post with data:", editorDraft);
-        const response = await createPost({ data: editorDraft });
+        if (!editorDraft.title || !editorDraft.content) {
+            setInputError(prev => ({
+                ...prev,
+                title: !editorDraft.title ? "Title is required." : "",
+                content: !editorDraft.content ? "Content is required." : "",
+            }))
+            return;
+        }
+
+        const form = new FormData();
+        form.append("title", editorDraft.title);
+        form.append("content", editorDraft.content);
+        form.append("eventDate", editorDraft.eventDate);
+        form.append("album", editorDraft.album);
+        editorDraft.media.image.forEach(image => form.append("image", image));
+        editorDraft.media.video.forEach(video => form.append("video", video));
+
+        const response = await createPost(form);
 
         if (!response) console.error("Failed to create post");
 
@@ -148,52 +170,101 @@ function AddPostOverlay({ setShowAddPanel, editorDraft, setEditorDraft }) {
         if (status === 200) {
             console.log("Post created successfully:", response);
             setShowAddPanel(false); // Close the overlay after successful post creation
-            setEditorDraft(""); // Clear the editor draft state
+            setEditorDraft({ title: "", content: "", media: { image: [], video: [] }, eventDate: "", album: "" }); // Clear the editor draft state
+            setInputError({ title: "", content: "", eventDate: "", media: "" }); // Reset input errors
         } else {
             console.error("Failed to create post:", response);
+            setError("Failed to create post. Please try again. Check console for more details.");
         }
     }
 
 
     return (
-        <div className="fixed top-0 left-0 w-lvw h-lvh bg-black/50 z-30 flex items-center justify-center p-10">
-            <div className="w-1/2 h-full bg-white rounded-lg shadow-lg flex flex-col items-center p-5 overflow-auto">
+        <div className="fixed top-0 left-0 w-lvw h-lvh bg-black/50 z-30 flex items-center justify-center p-10"
+            onClick={() => setShowAddPanel(false)}
+        >
+            <div className="w-1/2 h-full bg-white rounded-lg shadow-lg flex flex-col items-center p-5 overflow-auto" onClick={(e) => e.stopPropagation()}>
                 <h2 className="text-3xl font-bold mb-10 text-gray-700">Add New Post</h2>
 
                 {/* Title Input */}
-                <input type="text" className="w-full p-2 border-b border-gray-300 mb-5 focus:outline-none focus:border-primary-green-400"
-                    placeholder="Post Title"
-                    onChange={handleTitleChange}
-                    value={editorDraft.title}
-                    required
-                />
+                <div className="w-full mb-5">
+                    <TextInput onChange={handleTitleChange} value={editorDraft.title} placeholder="Post Title" />
+                    {/* Error Label */}
+                    {inputError.title && <span className="text-red-500 text-sm">{inputError.title}</span>}
+                </div>
 
                 {/* Date Picker */}
                 <div className="flex items-center justify-start w-full mb-5 gap-3">
                     <label className="text-gray-700 font-bold text-md text-nowrap ">Event Date:</label>
-                    <input type="date" className="w-full p-2 text-gray-700 border-b border-gray-300 mb-5 focus:outline-none focus:border-primary-green-400"
-                        placeholder="Event Date"
-                        onChange={handleDateChange}
-                        value={editorDraft.eventDate}
-                        max={new Date().toISOString().split("T")[0]}
-                    />
+                    <DatePicker value={editorDraft.eventDate} handleDateChange={handleDateChange} className="mb-5" />
                 </div>
 
                 {/* Quill Editor */}
-                <div id="editor" className="w-full h-full border border-gray-300 overflow-hidden min-h-[300px]" >
+                <div className="flex flex-col min-h-[300px] w-full overflow-hidden">
+                    <QuillEditor editorDraft={editorDraft} setEditorDraft={setEditorDraft} />
+                    {/* Error Label */}
+                    {inputError.content && <span className="text-red-500 text-sm">{inputError.content}</span>}
+                </div>
+
+                {/* Album Selection */}
+                <div className="w-full mt-5">
+                    <label className="text-gray-700 font-bold text-md text-nowrap">Album:</label>
+                    <select className="w-full p-2 text-gray-700 border border-gray-300 focus:outline-none focus:border-primary-green-400 mt-1"
+                        onChange={handleAlbumChange}
+                    >
+                        <option value="">New</option>
+                        {albums.map((album, index) => (
+                            <option key={index} value={album.id}>{album.name}</option>
+                        ))}
+                    </select>
+
+                    {/* Error Label */}
+                    {inputError.album && <span className="text-red-500 text-sm">{inputError.album}</span>}
+
+                    {/* Loading Labe */}
+                    {loading && <span className="text-gray-500 text-sm">Loading Albums...</span>}
                 </div>
 
                 {/* File Input */}
                 <div className="mt-5 w-full">
-                    <div className="flex items-center justify-start  mt-5 gap-3">
+                    <div>
                         <label className="text-gray-700 font-bold text-md text-nowrap">Media:</label>
-                        <input type="file" className="w-full p-2 text-gray-700 border border-gray-300 mb-5 focus:outline-none focus:border-primary-green-400"
+                        <input type="file" className="w-full p-2 text-gray-700 border border-gray-300 mb-5 focus:outline-none focus:border-primary-green-400 mt-1"
                             accept=".jpg, .jpeg, .png, .gif, .mp4, .webm"
                             multiple
                             onChange={fileChangeHandler}
                         />
                     </div>
-                    <span className="text-red-500 text-sm">{inputError.media}</span>
+                    {/* Display selected media files */}
+                    {(editorDraft.media.image.length > 0 || editorDraft.media.video.length > 0) ? (
+                        <div className="flex flex-wrap gap-3 mt-3 border border-gray-300 p-3 rounded-lg w-full h-[100px] overflow-auto">
+                            {editorDraft.media.image.map((image, index) => (
+                                <div key={index} className="relative w-20 h-full">
+                                    <div
+                                        title={`Remove - (${image.name})`}
+                                        className="absolute right-0 top-0 bg-red-500 hover:bg-red-400 cursor-pointer rounded-full p-1 z-10"
+                                        onClick={() => handleRemoveMedia("image", index)} >
+                                        <FaMinus className="w-[10px] h-[10px]" />
+                                    </div>
+                                    <img src={URL.createObjectURL(image)} alt={`Selected Image ${index + 1}`} className="w-full h-full object-cover rounded-md border border-gray-300" />
+                                </div>
+                            ))}
+                            {editorDraft.media.video.map((video, index) => (
+                                <div key={index} className="relative w-20 h-full">
+                                    <div
+                                        title={`Remove - (${video.name})`}
+                                        className="absolute right-0 top-0 bg-red-500 hover:bg-red-400 cursor-pointer rounded-full p-1 z-10"
+                                        onClick={() => handleRemoveMedia("video", index)} >
+                                        <FaMinus className="w-[10px] h-[10px]" />
+                                    </div>
+                                    <video src={URL.createObjectURL(video)} controls className="w-full h-full object-cover rounded-md border border-gray-300" />
+                                </div>
+                            ))}
+                        </div>
+                    ) : null}
+
+                    {/* Error Label */}
+                    {inputError.media && <span className="text-red-500 text-sm">{inputError.media}</span>}
                 </div>
                 {/* Action Buttons */}
                 <div className="flex items-center justify-end w-full mt-5 gap-3">
