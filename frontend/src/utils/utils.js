@@ -18,6 +18,7 @@ export function validateFile(files) {
     return [validFiles, invalidFiles];
 }
 
+// function to set delay typing on search input
 export function debounce(fn, delay) {
     let timeout;
 
@@ -26,3 +27,4 @@ export function debounce(fn, delay) {
         timeout = setTimeout(() => fn(...args), delay);
     }
 }
+

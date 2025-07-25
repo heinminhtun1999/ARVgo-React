@@ -3,8 +3,7 @@ import { useEffect, useState } from "react";
 import { useParams, useLocation, useNavigate } from "react-router-dom";
 
 // API 
-import { getPost, editPost } from "../../api/posts.js";
-import { getAllAlbums } from "../../api/albums.js";
+import { editPost } from "../../api/posts.js";
 
 // Components
 import Loading from '../../components/dashboard/Loading.jsx';
@@ -18,6 +17,7 @@ import { FaImages, FaMinus } from "react-icons/fa";
 
 // Utils
 import { validateFile } from '../../utils/utils.js';
+import { fetchPost, getAlbums } from '../../utils/postUtils.js';
 
 const API_URL = import.meta.env.VITE_BASE_URL;
 
@@ -38,58 +38,11 @@ function Post() {
     const [albumLoading, setAlbumLoading] = useState(true);
     const [error, setError] = useState(null);
     const [successMessage, setSuccessMessage] = useState(states ? states.message : null);
-    const [, forceRender] = useState(0);
 
     useEffect(() => {
-        async function fetchPost() {
-            setLoading(true);
-            try {
-                const response = await getPost(post_id);
-                const post = response.data.data[0];
-                setEditorDraft({
-                    title: post.title,
-                    content: post.content,
-                    media: { image: post.images, video: post.videos },
-                    eventDate: post.event_date,
-                    album: post.album_id,
-                    album_id: post.album_id
-                });
 
-                // Update to display media
-                setDisplayMedia({
-                    image: {
-                        id: post.image_id || [],
-                        url: post.images || []
-                    },
-                    video: {
-                        id: post.video_id || [],
-                        url: post.videos || []
-                    }
-                });
-            } catch (error) {
-                console.error("Error fetching post:", error);
-                setError("Failed to fetch posts. Please try again. Check console for more details.");
-            }
-            setLoading(false);
-        }
-
-        async function getAlbums() {
-            setAlbumLoading(true);
-            try {
-                const response = await getAllAlbums();
-                setAlbums(response.data.data);
-            } catch (error) {
-                console.error("[INFO] Error fetching albums:", error);
-                setInputError(prev => ({
-                    ...prev,
-                    album: "Error fetching albums. Create new album from title name or try again."
-                }))
-            }
-            setAlbumLoading(false);
-        }
-        getAlbums();
-
-        fetchPost();
+        fetchPost(post_id, setEditorDraft, setDisplayMedia, setLoading, setError);
+        getAlbums(setAlbums, setAlbumLoading, setInputError);
     }, []);
 
     // Input Handlers 
@@ -148,16 +101,14 @@ function Post() {
                     }));
 
                     // update display media
-                    setDisplayMedia(prev => {
-                        console.log("prev", prev);
-                        return {
-                            ...prev,
-                            image: {
-                                id: [...prev.image.id, null],
-                                url: [...prev.image.url, URL.createObjectURL(file)]
-                            }
-                        };
-                    });
+                    setDisplayMedia(prev => ({
+                        ...prev,
+                        image: {
+                            id: [...prev.image.id, null],
+                            url: [...prev.image.url, URL.createObjectURL(file)]
+                        }
+
+                    }));
 
                 } else if (videoFormats.includes(fileType)) {
                     setMediaToAdd(prev => ({
@@ -181,16 +132,26 @@ function Post() {
     }
 
     // Image remove handler
-    function handleRemoveMedia(type, id) {
-        const isStoredInDB = displayMedia[type].id[id]; // Get id of the media to check if it is stored in the database
+    function handleRemoveMedia(type, index) {
+        const isStoredInDB = displayMedia[type].id[index]; // Get id of the media to check if it is stored in the database
 
         // Check if the media is created before 
         // If it is not stored in the database, remove it from the mediaToAdd state
         if (!isStoredInDB) {
 
             // Updating the mediaToAdd array
-            const updatedArray = [...mediaToAdd[type]]; // Create a copy of the array of media to add
-            updatedArray.splice(id, 1); // Remove the media at the specified index
+            let updatedArray = [...mediaToAdd[type]]; // Create a copy of the array of media to add
+
+            // index coming from the parameter is the index of the displayMedia array 
+            // which is combined with the media that are already stored in the database and the newly added media
+            // so in order to remove the newly added media, we need to adjust the index.
+            // this is done by subtracting the length of the mediaToAdd array from the displayMedia array, 
+            // which we will get the length of the media that are stored in the database
+            // after that we remove that length from the index to get the correct index of the newly added media
+            // formula: actual index of the newly added media = index from displayMedia - (length of the displayMedia array - length of the mediaToAdd array)
+            const offset = displayMedia[type].url.length - updatedArray.length;
+            updatedArray.splice(index - offset, 1)// Remove the media at the specified index
+
             setMediaToAdd(prev => ({
                 ...prev,
                 [type]: updatedArray
@@ -198,8 +159,8 @@ function Post() {
 
             // Updating the display media
             const updatedDisplayMedia = { ...displayMedia[type] }; // Create a copy of the display media
-            updatedDisplayMedia.id.splice(id, 1); // Remove the id at the specified index
-            updatedDisplayMedia.url.splice(id, 1); // Remove the URL at the specified index
+            updatedDisplayMedia.id.splice(index, 1); // Remove the id at the specified index
+            updatedDisplayMedia.url.splice(index, 1); // Remove the URL at the specified index
             setDisplayMedia(prev => ({
                 ...prev,
                 [type]: updatedDisplayMedia
@@ -214,8 +175,8 @@ function Post() {
 
             // Remove from display media
             const updatedDisplayMedia = { ...displayMedia[type] }; // Create a copy of the display media
-            updatedDisplayMedia.id.splice(id, 1); // Remove the id at the specified index
-            updatedDisplayMedia.url.splice(id, 1); // Remove the URL at the specified index
+            updatedDisplayMedia.id.splice(index, 1); // Remove the id at the specified index
+            updatedDisplayMedia.url.splice(index, 1); // Remove the URL at the specified index
             setDisplayMedia(prev => ({
                 ...prev,
                 [type]: updatedDisplayMedia
@@ -246,19 +207,19 @@ function Post() {
         mediaToAdd.image.forEach(image => form.append("image", image));
         mediaToAdd.video.forEach(video => form.append("video", video));
 
+
         try {
             const response = await editPost(post_id, form);
             setSuccessMessage(response.data.message);
             setInputError({ title: "", content: "", eventDate: "", media: "" }); // Reset input errors
-            setEditorDraft({ title: "", content: "", media: { image: [], video: [] }, eventDate: "", album: "" }); // Clear the editor draft state
-            setDisplayMedia({ image: { id: [], url: [] }, video: { id: [], url: [] } }); // Clear the display media state
-            setMediaToAdd({ image: [], video: [] }); // Clear the media to add
-            forceRender();
         } catch (error) {
-            console.error("Error editing post:", error);
+            console.error("Error editing post:");
             setError("Failed to edit post. Please try again. Check console for more details.");
         }
-
+        fetchPost(post_id, setEditorDraft, setDisplayMedia, setLoading, setError); // Refresh post data
+        getAlbums(setAlbums, setAlbumLoading, setInputError); // Refresh albums
+        setMediaToAdd({ image: [], video: [] }); // Reset media to add
+        setMediaToRemove({ image: [], video: [] }); // Reset media to remove
     }
 
     return (

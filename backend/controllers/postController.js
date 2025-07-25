@@ -1,7 +1,7 @@
 const sql = require('../db/db');
 const fs = require('fs');
 const path = require('path');
-const { removeFiles, insertMediaFiles, removeOldMedia, restoreMediaFiles } = require("../utils/utils.js");
+const { removeFiles, insertMediaFiles, removeMediaFromPost, restoreMediaFiles, removeCreatedMediaFromDB } = require("../utils/utils.js");
 const { tmpUploadsPath } = require("../utils/configs.js");
 
 // Function to get a post by ID
@@ -102,12 +102,13 @@ module.exports.getAllPosts = async (req, res) => {
             data: {
                 posts,
                 fetchedLength: fetchedLength.length
-            }
+            },
+            error: null
         });
 
     } catch (error) {
         console.error("[INFO] Error fetching posts:", error);
-        res.status(500).json({ message: "An error occurred while fetching posts." });
+        res.status(500).json({ message: "An error occurred while fetching posts.", error: error, data: null });
     }
 }
 
@@ -121,12 +122,13 @@ module.exports.getPost = async (req, res) => {
 
         res.status(200).json({
             message: "Post fetched successfully",
-            data: post
+            data: post,
+            error: null
         })
 
     } catch (error) {
         console.error("[INFO] Error fetching post:", error);
-        res.status(500).json({ message: "An error occurred while fetching post." });
+        res.status(500).json({ message: "An error occurred while fetching post.", error: error, data: null });
     }
 }
 
@@ -140,38 +142,40 @@ module.exports.createPost = async (req, res) => {
         title,
         content,
         event_date: eventDate ? eventDate : new Date()
-    }
+    };
 
-    // Check if album exists
-    let newAlbum;
-
-    if (album) {
-        data.album_id = album
-    } else {
-        newAlbum = await sql`INSERT INTO albums (name) VALUES (${title}) RETURNING id`;
-        data.album_id = newAlbum[0].id;
-    }
+    let newAlbum, createdMediaIds, post;
 
     // Insert post into the database
     try {
-        const post = await sql`INSERT INTO posts ${sql(data)} RETURNING *`;
+
+        // Check if the album exists, if not create a new album
+        if (album) {
+            data.album_id = album
+        } else {
+            newAlbum = await sql`INSERT INTO albums (name) VALUES (${title}) RETURNING id`;
+            data.album_id = newAlbum[0].id;
+        }
+
+        post = await sql`INSERT INTO posts ${sql(data)} RETURNING *`;
 
         // Insert media files into the database
-        await insertMediaFiles(sql, req.files, post[0].id, data.album_id);
+        createdMediaIds = await insertMediaFiles(sql, req.files, post[0].id, data.album_id);
 
         res.status(200).json({
             message: "Post created successfully",
-            data: post[0]
+            data: post[0],
+            error: null
         });
     } catch (error) {
 
         console.error("[INFO] Error creating post:", error);
 
-        // Remove uploaded files in case of error
-        if (req.files.image && req.files.image.length > 0) {
-            removeFiles(req.files.image.map(file => file.path));
-        } else if (req.files.video && req.files.video.length > 0) {
-            removeFiles(req.files.video.map(file => file.path));
+        // Remove uploaded images and videos in case of error
+        removeFiles(req.files.image);
+        removeFiles(req.files.video);
+        if (post && createdMediaIds) {
+            await removeCreatedMediaFromDB(createdMediaIds, post[0].id, sql);
         }
 
         // Remove album if it was created but no post was inserted
@@ -181,7 +185,8 @@ module.exports.createPost = async (req, res) => {
 
         res.status(500).json({
             message: "Error creating post",
-            error: error
+            error: error,
+            data: null
         });
     }
 };
@@ -193,36 +198,42 @@ module.exports.editPost = async (req, res) => {
 
     const { post_id } = req.params;
 
-    const { title, content, eventDate, album, album_id, mediaToRemove } = body;
+    const { title, content, eventDate, album, album_id, mediaToRemove } = body; // album_id: posts's current album id, album: new album id if provided
     const oldImage = JSON.parse(mediaToRemove).image;
     const oldVideo = JSON.parse(mediaToRemove).video;
+
+    // Declare temporary arrays for old images and videos
+    const tempImages = [];
+    const tempVideos = [];
+
+    // Declare temporary array to store id of newly created medias
+    let createdMediaIds;
 
     // Check if post exists
     const post = await sql`SELECT * FROM posts WHERE id = ${post_id}`;
 
     if (!post[0]) {
         return res.status(404).json({
-            message: "Post not found."
+            message: "Post not found.",
+            error: null,
+            data: null
         });
     }
 
     // Prepare data for update
     let newAlbum
 
-    // Check if the album of the post needs to be updated
-    if (!album) {
-        // If the album is not provided, create a new album with the post title
-        newAlbum = await sql`INSERT INTO albums (name) VALUES (${title}) RETURNING id`;
-    } else if (album && album !== album_id) {
-        // If the album is provided and it is different from the current album, update the album
-        newAlbum = await sql`SELECT * FROM albums WHERE id = ${album}`;
-    }
-
-    // Declare temporary arrays for old images and videos
-    const tempImages = [];
-    const tempVideos = [];
-
     try {
+
+        // Check if the album of the post needs to be updated
+        if (!album) {
+            // If the album is not provided, create a new album with the post title
+            newAlbum = await sql`INSERT INTO albums (name) VALUES (${title}) RETURNING id`;
+        } else if (album && album !== album_id) {
+            // If the album is provided and it is different from the current album, update the album
+            newAlbum = await sql`SELECT * FROM albums WHERE id = ${album}`;
+        }
+
         // Update the post with new data
         const updatedPost = await sql`UPDATE posts SET title= ${title}, content = ${content}, event_date = ${eventDate}, album_id = ${newAlbum ? newAlbum[0].id : album_id} WHERE id = ${post_id} RETURNING *`;
 
@@ -239,9 +250,10 @@ module.exports.editPost = async (req, res) => {
 
             // If the old album has no posts, images or videos associated with it, remove the album
             if (associatedPosts[0].count == 0 && associatedImages[0].count == 0 && associatedVideos[0].count == 0) {
-                await sql`DELETE FROM albums WHERE id = ${post[0].album_id}`;
+                await sql`DELETE FROM albums WHERE id = ${album_id}`;
             }
         }
+
 
         // Remove the images and videos associated with the post
         if (oldImage.length > 0 || oldVideo.length > 0) {
@@ -259,13 +271,13 @@ module.exports.editPost = async (req, res) => {
                 tempVideos.push(v[0]);
             }
 
-            // Copying old images and videos to a temporary folder
-            await removeOldMedia(tempImages, 'images', sql);
-            await removeOldMedia(tempVideos, 'videos', sql);
+            // Remove media files from the database
+            await removeMediaFromPost(tempImages, 'images', sql);
+            await removeMediaFromPost(tempVideos, 'videos', sql);
         }
 
-        // Insert new media files into the database
-        await insertMediaFiles(sql, files, updatedPost[0].id, updatedPost[0].album_id);
+        // Insert new media files into the database and get their IDs
+        createdMediaIds = await insertMediaFiles(sql, files, updatedPost[0].id, updatedPost[0].album_id);
 
         // Remove tmp directory if it exists
         if (fs.existsSync(tmpUploadsPath)) {
@@ -276,7 +288,8 @@ module.exports.editPost = async (req, res) => {
 
         res.status(200).json({
             message: "Post updated successfully",
-            data: post
+            data: post,
+            error: null
         });
 
     } catch (error) {
@@ -302,10 +315,11 @@ module.exports.editPost = async (req, res) => {
         await restoreMediaFiles(tempVideos, 'videos', sql, post_id, album_id);
 
         // Remove uploaded files in case of error
-        if (files.image && files.image.length > 0) {
-            removeFiles(files.image.map(file => file.path));
-        } else if (files.video && files.video.length > 0) {
-            removeFiles(files.video.map(file => file.path));
+        // Remove uploaded images and videos in case of error
+        removeFiles(files.image);
+        removeFiles(files.video);
+        if (createdMediaIds) {
+            await removeCreatedMediaFromDB(createdMediaIds, post_id, sql);
         }
 
         // Remove tmp directory if it exists
@@ -313,9 +327,12 @@ module.exports.editPost = async (req, res) => {
             fs.rmSync(tmpUploadsPath, { recursive: true });
         }
 
+        const originalPost = await getPost(post_id);
+
         return res.status(500).json({
             message: "Error updating post",
-            error: error
+            error: error,
+            data: originalPost
         });
     }
 };

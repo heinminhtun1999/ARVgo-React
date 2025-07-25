@@ -3,34 +3,46 @@ const path = require('path');
 const { tmpUploadsPath } = require('./configs.js');
 
 // Remove files from uploads directory
-module.exports.removeFiles = (files) => {
-    files.forEach(file => {
-        fs.unlink(file, (err) => {
-            if (err) {
-                throw new Error(`Error deleting file ${file}: ${err.message}`);
-            } else {
-                console.log(`[INFO] File deleted: ${file}`);
-            }
+module.exports.removeFiles = async (files) => {
+
+    if (files && files.length > 0) {
+        const filesPaths = files.map(file => file.path);
+        filesPaths.forEach(file => {
+            fs.unlinkSync(file, (err) => {
+                if (err) {
+                    throw new Error(`Error deleting file ${file}: ${err.message}`);
+                } else {
+                    console.log(`[INFO] File deleted: ${file}`);
+                }
+            });
         });
-    })
+    }
 }
 
 // Function to insert media files into the database
 module.exports.insertMediaFiles = async (sql, files, postId, albumId) => {
 
+    let imageIds = [];
+    let videoIds = [];
+
     // Extract images and videos url from the request if they exist
     if (files.image) {
         const images = files.image.map(file => ({ url: file.path, album_id: albumId, post_id: postId }));
-        await sql`INSERT INTO images ${sql(images)}`;
+        imageIds = await sql`INSERT INTO images ${sql(images)} RETURNING id`;
     }
     if (files.video) {
         const videos = files.video.map(file => ({ title: file.originalname, description: "", url: file.path, album_id: albumId, post_id: postId, public: true }));
-        await sql`INSERT INTO videos ${sql(videos)}`;
+        videoIds = await sql`INSERT INTO videos ${sql(videos)} RETURNING id`;
+    }
+
+    return {
+        imageIds,
+        videoIds
     }
 }
 
 // Function to remove old media files
-module.exports.removeOldMedia = async (mediaArray, type, sql) => {
+module.exports.removeMediaFromPost = async (mediaArray, type, sql) => {
     for (const media of mediaArray) {
         const url = media.url;
 
@@ -54,6 +66,7 @@ module.exports.removeOldMedia = async (mediaArray, type, sql) => {
 
 // Function to restore media files from the temporary folder
 module.exports.restoreMediaFiles = async (mediaArray, type, sql, post_id, album_id) => {
+
     for (const media of mediaArray) {
         const url = media.url;
 
@@ -81,3 +94,15 @@ module.exports.restoreMediaFiles = async (mediaArray, type, sql, post_id, album_
         }
     }
 }
+
+// Function to remove newly created media files from the database
+module.exports.removeCreatedMediaFromDB = async (mediaIds, post_id, sql) => {
+    const { imageIds, videoIds } = mediaIds;
+
+    for (const i of imageIds) {
+        await sql`DELETE FROM images WHERE id = ${i.id}`;
+    }
+    for (const i of videoIds) {
+        await sql`DELETE FROM videos WHERE id = ${i.id}`;
+    }
+};

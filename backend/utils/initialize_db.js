@@ -54,7 +54,9 @@ async function initializeDB(sql) {
                       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
                   )`
 
-        console.log("-".repeat(50) + "\n".repeat(5));
+        console.log("-".repeat(47));
+        console.log("Database initialized successfully. 🫡  🫡  🫡  🫡");
+        console.log("-".repeat(47) + "\n".repeat(5));
     }
     catch (error) {
         console.log(error);
