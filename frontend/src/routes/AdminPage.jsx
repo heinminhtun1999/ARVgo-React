@@ -7,7 +7,7 @@ import { Outlet, useLocation } from "react-router-dom";
 
 // Icons & Logo
 import { GiHamburgerMenu } from "react-icons/gi";
-import ARVgoLogo2 from "../assets/images/ARV Logo 2.png";
+import ARVgoLogo2 from "../assets/images/ARgo Logo.png";
 
 function AdminPage() {
 
@@ -36,7 +36,7 @@ function AdminPage() {
                 </div>
             </header>
             {/*Main Outer Div*/}
-            <main className="w-full h-full p-2 overflow-x-hidden">
+            <main className="w-full h-full p-2 overflow-y-hidden">
                 {/*Inner Section*/}
                 <div className="w-full h-full rounded-lg shadow-sm bg-white px-5 py-4 ">
                     <Outlet />

@@ -8,7 +8,7 @@ import "quill/dist/quill.snow.css";
 const toolbarOptions = [
     [{ font: [] }, { size: [] }], // custom dropdown
     [{ header: [1, 2, 3, 4, 5] }],
-    ['bold', 'italic', 'underline', 'strike', { script: 'sub' }, { script: 'super' }, 'link', 'blockquote', { 'list': 'ordered' }, { 'list': 'bullet' }, { 'list': 'check' }],// toggled buttons
+    ['bold', 'italic', 'underline', 'strike', { script: 'sub' }, { script: 'super' }, 'link', 'blockquote', { 'list': 'ordered' }, { 'list': 'bullet' }, { 'list': 'check' }], // toggled buttons
     [{ color: [] }, { align: [] }], // dropdown with defaults from theme,
     ['clean'], // remove formatting button
 ];
@@ -24,7 +24,7 @@ function QuillEditor({ editorDraft, setEditorDraft }) {
             return;
         };
 
-        //  Quill Editor Options
+        // Quill Editor Options
         const options = {
             placeholder: '',
             theme: 'snow',
@@ -50,7 +50,7 @@ function QuillEditor({ editorDraft, setEditorDraft }) {
             }));
         });
 
-    }, []);
+    }, [editorDraft.content]);
 
     return (
         <div id="editor" className="w-full !h-[300px] overflow-y-auto border border-gray-300 z-0">

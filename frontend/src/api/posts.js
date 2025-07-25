@@ -47,3 +47,19 @@ export const getPost = async (id) => {
         }
     }
 }
+
+export const editPost = async (id, data) => {
+    try {
+        const response = await axios.patch(`/posts/${id}`, data, {
+            headers: {
+                'Content-Type': 'multipart/form-data',
+            }
+        });
+        return response;
+    } catch (error) {
+        throw error.response || {
+            status: 500,
+            message: "An error occurred while editing the post."
+        }
+    }
+}

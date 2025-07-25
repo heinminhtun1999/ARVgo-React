@@ -1,6 +1,6 @@
-function SecondaryButton({ text, onClick, disabled }) {
+function SecondaryButton({ text, onClick, disabled, className }) {
     return (
-        <button className="bg-stone-500 text-white p-3 rounded-lg hover:bg-gray-300 cursor-pointer" onClick={onClick} disabled={disabled}>
+        <button className={`bg-stone-500 text-white p-3 rounded hover:bg-gray-300 cursor-pointer ${className}`} onClick={onClick} disabled={disabled}>
             {text}
         </button>
     )

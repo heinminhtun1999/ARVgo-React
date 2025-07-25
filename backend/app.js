@@ -29,7 +29,7 @@ const sql = require("./db/db.js");
 const initializeDB = require("./utils/initialize_db.js");
 
 // Import Controllers
-const { getAllPosts, getPost, createPost } = require("./controllers/postController.js");
+const { getAllPosts, getPost, createPost, editPost } = require("./controllers/postController.js");
 const { getAllAlbums } = require("./controllers/albumController.js");
 
 // Server Configuration and Initialization
@@ -38,10 +38,10 @@ const app = express();
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use("/media", express.static("uploads"));
+app.use("/uploads", express.static("uploads"));
 app.use(cors({
     origin: "*",
-    methods: ["GET", "POST", "PUT", "DELETE"],
+    methods: ["GET", "POST", "PATCH", "PUT", "DELETE"],
     credentials: true,
 }));
 (async () => {
@@ -57,6 +57,7 @@ app.get("/", async (req, res) => {
 app.get("/api/posts", getAllPosts);
 app.get("/api/posts/:post_id", getPost);
 app.post("/api/posts", uploads.fields([{ name: "image" }, { name: "video" }]), createPost);
+app.patch("/api/posts/:post_id", uploads.fields([{ name: "newImage" }, { name: "newVideo" }]), editPost);
 
 // Albums
 app.get("/api/albums", getAllAlbums);

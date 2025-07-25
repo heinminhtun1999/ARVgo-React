@@ -1,7 +1,7 @@
 import { useLocation, Link } from 'react-router-dom';
 
 // Components
-import ARVgoLogo2 from "../../assets/images/ARV Logo 2.png"
+import ARVgoLogo2 from "../../assets/images/ARgo Logo.png"
 import { MdHome } from "react-icons/md";
 import { MdPermMedia } from "react-icons/md";
 import { BsPostcardFill } from "react-icons/bs";

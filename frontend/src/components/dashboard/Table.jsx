@@ -7,7 +7,7 @@ import { FaSortAmountDown } from "react-icons/fa";
 import { FaSortAmountUp } from "react-icons/fa";
 import { MdDeleteForever } from "react-icons/md";
 
-function Table({ data, orderBy, setOrderBy, columns, state, navigateRoute }) {
+function Table({ data, orderBy, columns, state, navigateRoute, setFilter }) {
 
     const navigate = useNavigate();
 
@@ -21,9 +21,25 @@ function Table({ data, orderBy, setOrderBy, columns, state, navigateRoute }) {
     function handleSorting(columnName) {
         const currentOrder = orderBy.field;
         if (columnName === currentOrder) {
-            setOrderBy(prev => ({ ...prev, order: prev.order === "ASC" ? "DESC" : "ASC" }));
+            setFilter(prev => (
+                {
+                    ...prev,
+                    orderBy: {
+                        field: columnName,
+                        order: prev.orderBy.order === "ASC" ? "DESC" : "ASC"
+                    }
+                }
+            ))
         } else {
-            setOrderBy({ field: columnName, order: "DESC" });
+            setFilter(prev => (
+                {
+                    ...prev,
+                    orderBy: {
+                        field: columnName,
+                        order: "DSC"
+                    }
+                }
+            ))
         }
     }
 
@@ -62,7 +78,7 @@ function Table({ data, orderBy, setOrderBy, columns, state, navigateRoute }) {
                         )
                     })
                 }
-                <td className="w-[30px] px-3 py-5"><MdDeleteForever className="text-xl text-red-500 hover:text-red-400 m-auto" /></td>
+                <td className="w-[30px] px-3 py-5" onClick={(e) => e.stopPropagation()}><MdDeleteForever className="text-xl text-red-500 hover:text-red-400 m-auto" /></td>
             </tr>
         )
     });

@@ -13,6 +13,9 @@ import { FaMinus } from "react-icons/fa";
 import { createPost } from '../../api/posts.js';
 import { getAllAlbums } from '../../api/albums.js';
 
+// Utils
+import { validateFile } from '../../utils/utils.js';
+
 
 function AddPostOverlay({ setShowAddPanel, editorDraft, setEditorDraft, setError }) {
 
@@ -43,7 +46,7 @@ function AddPostOverlay({ setShowAddPanel, editorDraft, setEditorDraft, setError
 
 
     // Handle Title, Date and Album Change
-    const handleTitleChange = (e) => {
+    function handleTitleChange(e) {
         const title = e.target.value;
         setEditorDraft(prev => ({
             ...prev,
@@ -51,7 +54,7 @@ function AddPostOverlay({ setShowAddPanel, editorDraft, setEditorDraft, setError
         }));
     }
 
-    const handleDateChange = (e) => {
+    function handleDateChange(e) {
         const eventDate = e.target.value;
         setEditorDraft(prev => ({
             ...prev,
@@ -59,7 +62,7 @@ function AddPostOverlay({ setShowAddPanel, editorDraft, setEditorDraft, setError
         }));
     }
 
-    const handleAlbumChange = (e) => {
+    function handleAlbumChange(e) {
         const album = e.target.value;
         setEditorDraft(prev => ({
             ...prev,
@@ -68,25 +71,11 @@ function AddPostOverlay({ setShowAddPanel, editorDraft, setEditorDraft, setError
     }
 
     // Handle File Change
-    const fileChangeHandler = (e) => {
+    function fileChangeHandler(e) {
         const files = e.target.files;
-        const fileArray = Array.from(files);
 
-        if (fileArray.length === 0) return;
+        let [validFiles, invalidFiles] = validateFile(files);
 
-        // Check for file size limit (20MB)
-        const validFiles = [];
-        const invalidFiles = [];
-
-        fileArray.forEach((file, i) => {
-            if (file.size <= 20 * 1024 * 1024) {
-                validFiles.push(file);
-            } else {
-                invalidFiles.push(file.name);
-            }
-        })
-
-        // Update input error with message
         if (invalidFiles.length > 0) {
             setInputError(prev => ({
                 ...prev,
@@ -123,17 +112,14 @@ function AddPostOverlay({ setShowAddPanel, editorDraft, setEditorDraft, setError
     }
 
     // Handle Remove Media
-    const handleRemoveMedia = (type, index) => {
+    function handleRemoveMedia(type, index) {
         setEditorDraft(prev => {
             const updatedMedia = {
                 image: [...prev.media.image],
                 video: [...prev.media.video]
             };
-            if (type == "image") {
-                updatedMedia.image.splice(index, 1);
-            } else if (type == "video") {
-                updatedMedia.video.splice(index, 1);
-            }
+            // Remove the media item based on type and index
+            updatedMedia[type].splice(index, 1);
             return {
                 ...prev,
                 media: updatedMedia
@@ -142,7 +128,9 @@ function AddPostOverlay({ setShowAddPanel, editorDraft, setEditorDraft, setError
     }
 
     // Handle Post Submission
-    const handlePostSubmission = async () => {
+    async function handlePostSubmission() {
+
+        // If Title Or Content is empty, set input error
         if (!editorDraft.title || !editorDraft.content) {
             setInputError(prev => ({
                 ...prev,
@@ -160,19 +148,14 @@ function AddPostOverlay({ setShowAddPanel, editorDraft, setEditorDraft, setError
         editorDraft.media.image.forEach(image => form.append("image", image));
         editorDraft.media.video.forEach(video => form.append("video", video));
 
-        const response = await createPost(form);
+        let response;
 
-        if (!response) console.error("Failed to create post");
-
-        const status = response.status;
-
-        // Check if the response is successful
-        if (status === 200) {
-            console.log("Post created successfully:", response);
+        try {
+            response = await createPost(form);
             setShowAddPanel(false); // Close the overlay after successful post creation
             setEditorDraft({ title: "", content: "", media: { image: [], video: [] }, eventDate: "", album: "" }); // Clear the editor draft state
             setInputError({ title: "", content: "", eventDate: "", media: "" }); // Reset input errors
-        } else {
+        } catch (error) {
             console.error("Failed to create post:", response);
             setError("Failed to create post. Please try again. Check console for more details.");
         }
@@ -246,7 +229,12 @@ function AddPostOverlay({ setShowAddPanel, editorDraft, setEditorDraft, setError
                                         onClick={() => handleRemoveMedia("image", index)} >
                                         <FaMinus className="w-[10px] h-[10px]" />
                                     </div>
-                                    <img src={URL.createObjectURL(image)} alt={`Selected Image ${index + 1}`} className="w-full h-full object-cover rounded-md border border-gray-300" />
+                                    <img
+                                        src={URL.createObjectURL(image)}
+                                        alt={`Selected Image ${index + 1}`}
+                                        className="w-full h-full object-cover rounded-md border border-gray-300 select-none"
+                                        draggable="false"
+                                    />
                                 </div>
                             ))}
                             {editorDraft.media.video.map((video, index) => (
@@ -257,7 +245,12 @@ function AddPostOverlay({ setShowAddPanel, editorDraft, setEditorDraft, setError
                                         onClick={() => handleRemoveMedia("video", index)} >
                                         <FaMinus className="w-[10px] h-[10px]" />
                                     </div>
-                                    <video src={URL.createObjectURL(video)} controls className="w-full h-full object-cover rounded-md border border-gray-300" />
+                                    <video
+                                        src={URL.createObjectURL(video)}
+                                        controls
+                                        className="w-full h-full object-cover rounded-md border border-gray-300 select-none"
+                                        draggable="false"
+                                    />
                                 </div>
                             ))}
                         </div>
