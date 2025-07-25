@@ -1,7 +1,17 @@
-// Server Module
+// Server Module and Configuration
 const express = require('express');
 const env = require('dotenv').config();
 const cors = require('cors');
+const { imagesPath, videosPath } = require("./utils/configs.js");
+const fs = require('fs');
+
+// Ensure upload directories exist
+if (!fs.existsSync(imagesPath)) {
+    fs.mkdirSync(imagesPath, { recursive: true });
+}
+if (!fs.existsSync(videosPath)) {
+    fs.mkdirSync(videosPath, { recursive: true });
+}
 
 // File Upload 
 const multer = require('multer');
@@ -56,8 +66,8 @@ app.get("/", async (req, res) => {
 // Posts
 app.get("/api/posts", getAllPosts);
 app.get("/api/posts/:post_id", getPost);
-app.post("/api/posts", uploads.fields([{ name: "image" }, { name: "video" }]), createPost);
-app.patch("/api/posts/:post_id", uploads.fields([{ name: "newImage" }, { name: "newVideo" }]), editPost);
+app.post("/api/post", uploads.fields([{ name: "image" }, { name: "video" }]), createPost);
+app.patch("/api/posts/:post_id", uploads.fields([{ name: "image" }, { name: "video" }]), editPost);
 
 // Albums
 app.get("/api/albums", getAllAlbums);

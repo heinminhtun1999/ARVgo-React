@@ -1,5 +1,6 @@
 // React 
 import { useEffect, useState } from 'react';
+import { useNavigate, useLocation } from "react-router-dom";
 
 // Components
 import PrimaryButton from './Buttons/PrimaryButton.jsx';
@@ -17,11 +18,14 @@ import { getAllAlbums } from '../../api/albums.js';
 import { validateFile } from '../../utils/utils.js';
 
 
-function AddPostOverlay({ setShowAddPanel, editorDraft, setEditorDraft, setError }) {
+function AddPostOverlay({ setShowAddPanel, editorDraft, setEditorDraft, setError, state }) {
 
     const [inputError, setInputError] = useState({ title: "", content: "", eventDate: "", media: "", album: "" });
     const [albums, setAlbums] = useState([]);
     const [loading, setLoading] = useState(true);
+
+    const navigate = useNavigate();
+    const location = useLocation();
 
     useEffect(() => {
 
@@ -148,15 +152,15 @@ function AddPostOverlay({ setShowAddPanel, editorDraft, setEditorDraft, setError
         editorDraft.media.image.forEach(image => form.append("image", image));
         editorDraft.media.video.forEach(video => form.append("video", video));
 
-        let response;
-
         try {
-            response = await createPost(form);
+            const response = await createPost(form);
+            const message = JSON.stringify({ ...state, message: response.data.message });
+            navigate(`${location.pathname}/${response.data.data.id}`, { state: message }); // Redirect to the newly created post or update state
             setShowAddPanel(false); // Close the overlay after successful post creation
             setEditorDraft({ title: "", content: "", media: { image: [], video: [] }, eventDate: "", album: "" }); // Clear the editor draft state
             setInputError({ title: "", content: "", eventDate: "", media: "" }); // Reset input errors
         } catch (error) {
-            console.error("Failed to create post:", response);
+            console.error("Failed to create post:", error);
             setError("Failed to create post. Please try again. Check console for more details.");
         }
     }

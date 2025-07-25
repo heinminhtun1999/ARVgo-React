@@ -35,6 +35,7 @@ async function initializeDB(sql) {
               (
                   id SERIAL PRIMARY KEY,
                   title TEXT NOT NULL,
+                  public BOOLEAN NOT NULL DEFAULT FALSE,
                   description TEXT,
                   url  TEXT NOT NULL,
                   album_id INTEGER,

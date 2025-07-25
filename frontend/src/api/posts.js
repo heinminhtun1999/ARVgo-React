@@ -4,7 +4,7 @@ const axios = instance;
 
 export const createPost = async (data) => {
     try {
-        const response = await axios.post("/posts", data, {
+        const response = await axios.post("/post", data, {
             headers: {
                 'Content-Type': 'multipart/form-data',
             }

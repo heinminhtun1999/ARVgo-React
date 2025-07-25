@@ -12,6 +12,7 @@ import QuillEditor from '../../components/dashboard/QuillEditor.jsx';
 import TextInput from '../../components/dashboard/TextInput.jsx';
 import DatePicker from '../../components/dashboard/DatePicker.jsx';
 import ErrorAlert from '../../components/dashboard/ErrorAlert.jsx';
+import SuccessAlert from '../../components/dashboard/SuccessAlert.jsx';
 import PrimaryButton from '../../components/dashboard/Buttons/PrimaryButton.jsx';
 import { FaImages, FaMinus } from "react-icons/fa";
 
@@ -24,6 +25,8 @@ function Post() {
 
     const { post_id } = useParams();
     const location = useLocation();
+    const states = JSON.parse(location.state);
+    const navigate = useNavigate();
 
     const [editorDraft, setEditorDraft] = useState({ title: "", content: "", eventDate: "", album: "", album_id: "" }); // album_id = current album id
     const [displayMedia, setDisplayMedia] = useState({ image: { id: [], url: [] }, video: { id: [], url: [] } });
@@ -34,6 +37,8 @@ function Post() {
     const [loading, setLoading] = useState(true);
     const [albumLoading, setAlbumLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [successMessage, setSuccessMessage] = useState(states ? states.message : null);
+    const [, forceRender] = useState(0);
 
     useEffect(() => {
         async function fetchPost() {
@@ -86,9 +91,6 @@ function Post() {
 
         fetchPost();
     }, []);
-
-    const states = JSON.parse(location.state);
-    const navigate = useNavigate();
 
     // Input Handlers 
     function handleTextInputChange(e) {
@@ -241,14 +243,17 @@ function Post() {
         form.append("album", editorDraft.album);
         form.append("album_id", editorDraft.album_id);
         form.append("mediaToRemove", JSON.stringify(mediaToRemove));
-        mediaToAdd.image.forEach(image => form.append("newImage", image));
-        mediaToAdd.video.forEach(video => form.append("newVideo", video));
-
-        let response;
+        mediaToAdd.image.forEach(image => form.append("image", image));
+        mediaToAdd.video.forEach(video => form.append("video", video));
 
         try {
-            response = await editPost(post_id, form);
+            const response = await editPost(post_id, form);
+            setSuccessMessage(response.data.message);
             setInputError({ title: "", content: "", eventDate: "", media: "" }); // Reset input errors
+            setEditorDraft({ title: "", content: "", media: { image: [], video: [] }, eventDate: "", album: "" }); // Clear the editor draft state
+            setDisplayMedia({ image: { id: [], url: [] }, video: { id: [], url: [] } }); // Clear the display media state
+            setMediaToAdd({ image: [], video: [] }); // Clear the media to add
+            forceRender();
         } catch (error) {
             console.error("Error editing post:", error);
             setError("Failed to edit post. Please try again. Check console for more details.");
@@ -262,6 +267,11 @@ function Post() {
             {/* Error Box */}
             {
                 error && <ErrorAlert error={error} setError={setError} />
+            }
+
+            {/* Success Box */}
+            {
+                successMessage && <SuccessAlert successMessage={successMessage} setSuccessMessage={setSuccessMessage} />
             }
 
             {/* Main Content */}

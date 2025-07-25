@@ -1,7 +1,34 @@
 const sql = require('../db/db');
 const fs = require('fs');
 const path = require('path');
-const { removeFiles } = require("../utils/utils.js");
+const { removeFiles, insertMediaFiles, removeOldMedia, restoreMediaFiles } = require("../utils/utils.js");
+const { tmpUploadsPath } = require("../utils/configs.js");
+
+// Function to get a post by ID
+async function getPost(postId) {
+    const query = sql`SELECT 
+                                posts.id as id,
+                                posts.title as title,
+                                to_char(posts.event_date, 'YYYY-MM-DD') as event_date,
+                                ARRAY_AGG(DISTINCT images.id) FILTER (WHERE images.id IS NOT NULL) AS image_id,
+                                ARRAY_AGG(DISTINCT images.url) FILTER (WHERE images.url IS NOT NULL) AS images,
+                                ARRAY_AGG(DISTINCT videos.id) FILTER (WHERE videos.id IS NOT NULL) AS video_id,
+                                ARRAY_AGG(DISTINCT videos.url) FILTER (WHERE videos.url IS NOT NULL) AS videos,
+                                albums.name as album,
+                                albums.id as album_id,
+                                posts.content as content
+                            FROM posts
+                            LEFT JOIN images ON posts.id = images.post_id
+                            LEFT JOIN videos ON posts.id = videos.post_id
+                            LEFT JOIN albums ON posts.album_id = albums.id
+                            WHERE posts.id = ${postId}
+                            GROUP BY posts.id, albums.name, albums.id;`;
+
+    const post = await query;
+
+    return post;
+}
+
 
 // Get All posts 
 module.exports.getAllPosts = async (req, res) => {
@@ -23,6 +50,7 @@ module.exports.getAllPosts = async (req, res) => {
 
     try {
 
+        // Base query to fetch posts with filtering and pagination
         let baseQuery = `
         SELECT posts.id AS id,
                 posts.title AS title,
@@ -41,16 +69,20 @@ module.exports.getAllPosts = async (req, res) => {
         const params = [`%${searchKeyword}%`];
         let paramIndex = 2;
 
+        // Add filters based on event date, start date and end date
         if (eventDate) {
             baseQuery += ` AND to_char(posts.event_date, 'YYYY-MM-DD') = $${paramIndex}`;
             params.push(eventDate);
             paramIndex++;
         }
+
+        // Add filters for start date and end date
         if (startDate) {
             baseQuery += ` AND to_char(posts.created_at, 'YYYY-MM-DD') >= $${paramIndex}`;
             params.push(startDate);
             paramIndex++;
         }
+
         if (endDate) {
             baseQuery += ` AND to_char(posts.created_at, 'YYYY-MM-DD') <= $${paramIndex}`;
             params.push(endDate);
@@ -85,26 +117,8 @@ module.exports.getPost = async (req, res) => {
     const { post_id } = req.params;
 
     try {
-        const query = sql`SELECT 
-                                posts.id as id,
-                                posts.title as title,
-                                to_char(posts.event_date, 'YYYY-MM-DD') as event_date,
-                                ARRAY_AGG(DISTINCT images.id) FILTER (WHERE images.id IS NOT NULL) AS image_id,
-                                ARRAY_AGG(DISTINCT images.url) FILTER (WHERE images.url IS NOT NULL) AS images,
-                                ARRAY_AGG(DISTINCT videos.id) FILTER (WHERE videos.id IS NOT NULL) AS video_id,
-                                ARRAY_AGG(DISTINCT videos.url) FILTER (WHERE videos.url IS NOT NULL) AS videos,
-                                albums.name as album,
-                                albums.id as album_id,
-                                posts.content as content
-                            FROM posts
-                            LEFT JOIN images ON posts.id = images.post_id
-                            LEFT JOIN videos ON posts.id = videos.post_id
-                            LEFT JOIN albums ON posts.album_id = albums.id
-                            WHERE posts.id = ${post_id}
-                            GROUP BY posts.id, albums.name, albums.id;`;
+        const post = await getPost(post_id);
 
-        const post = await query;
-        console.log(post)
         res.status(200).json({
             message: "Post fetched successfully",
             data: post
@@ -127,7 +141,7 @@ module.exports.createPost = async (req, res) => {
         content,
         event_date: eventDate ? eventDate : new Date()
     }
-    console.log(req.files)
+
     // Check if album exists
     let newAlbum;
 
@@ -142,21 +156,16 @@ module.exports.createPost = async (req, res) => {
     try {
         const post = await sql`INSERT INTO posts ${sql(data)} RETURNING *`;
 
-        // Extract images and videos url from the request if they exist
-        if (req.files.image) {
-            const images = req.files.image.map(file => ({ url: file.path, album_id: data.album_id, post_id: post[0].id }));
-            await sql`INSERT INTO images ${sql(images)}`;
-        }
-        if (req.files.video) {
-            const videos = req.files.video.map(file => ({ title: file.originalname, description: "", url: file.path, album_id: data.album_id, post_id: post[0].id }));
-            await sql`INSERT INTO videos ${sql(videos)}`;
-        }
+        // Insert media files into the database
+        await insertMediaFiles(sql, req.files, post[0].id, data.album_id);
 
         res.status(200).json({
             message: "Post created successfully",
             data: post[0]
         });
     } catch (error) {
+
+        console.error("[INFO] Error creating post:", error);
 
         // Remove uploaded files in case of error
         if (req.files.image && req.files.image.length > 0) {
@@ -179,27 +188,6 @@ module.exports.createPost = async (req, res) => {
 
 // Edit Post
 module.exports.editPost = async (req, res) => {
-    // Album Steps
-    // 1. Check if album is null
-    // 2. If album is null, create a new album with the post title
-    // 3. If the album is null, and the post has been updated with new album, check the old album if there are posts associated with it
-    // 4. If the old album has no posts associated with it, remove the album
-    // 5. If the old album has posts associated with it, do not remove the album
-    // 6. If the album is the same, do not update the album
-    // 7. If the album is different, update the album with the new album name and repeat the steep with step 4
-
-    // Steps
-    // 1. Find the post by ID
-    // 2. Update the post with new data
-    // 3. find the images and videos associated with the post from mediaToRemove
-    // 4. Before removing the files, store them in a temporary array to make sure they are revertable if any error occurs
-    // 5. Remove the files from the server
-    // 6. Add new files to the post if they exist
-
-    // Error Handling
-    // If any error occurs during the save operation, remove any new files that were uploaded
-    // and revert the post to its previous state and recreate the old album if it was removed
-    // If there are media files to be removed, before removing them, store temp to make sure they are revertable if any error occurs
 
     const { files, body } = req;
 
@@ -208,7 +196,6 @@ module.exports.editPost = async (req, res) => {
     const { title, content, eventDate, album, album_id, mediaToRemove } = body;
     const oldImage = JSON.parse(mediaToRemove).image;
     const oldVideo = JSON.parse(mediaToRemove).video;
-    const { newImage, newVideo } = files;
 
     // Check if post exists
     const post = await sql`SELECT * FROM posts WHERE id = ${post_id}`;
@@ -218,8 +205,6 @@ module.exports.editPost = async (req, res) => {
             message: "Post not found."
         });
     }
-
-    console.log("Editing post with files:", files);
 
     // Prepare data for update
     let newAlbum
@@ -258,10 +243,10 @@ module.exports.editPost = async (req, res) => {
             }
         }
 
-        // Update the images and videos associated with the post
+        // Remove the images and videos associated with the post
         if (oldImage.length > 0 || oldVideo.length > 0) {
-            if (!fs.existsSync(path.join(__dirname, '../uploads/tmp'))) {
-                fs.mkdirSync(path.join(__dirname, '../uploads/tmp'));
+            if (!fs.existsSync(tmpUploadsPath)) {
+                fs.mkdirSync(tmpUploadsPath);
             }
             // Fetch old images and videos from the database and store them in a temporary array
             for (const image of oldImage) {
@@ -275,43 +260,24 @@ module.exports.editPost = async (req, res) => {
             }
 
             // Copying old images and videos to a temporary folder
-            for (const image of tempImages) {
-                const url = image.url;
-                await sql`DELETE FROM images WHERE id = ${image.id}`;
-                if (fs.existsSync(url)) {
-                    const destination = path.join(process.cwd(), 'uploads/tmp/', path.basename(url));
-                    fs.copyFileSync(url, destination); // Copy the file to the temporary folder
-                    fs.unlinkSync(url); // Remove the file from the original location
-                }
-            }
-
-            for (const video of tempVideos) {
-                const url = video.url;
-                await sql`DELETE FROM videos WHERE id = ${video.id}`;
-                if (fs.existsSync(url)) {
-                    const destination = path.join(process.cwd(), 'uploads/tmp/', path.basename(url));
-                    fs.copyFileSync(url, destination); // Copy the file to the temporary folder
-                    fs.unlinkSync(url); // Remove the file from the original location
-                }
-            }
-
-
+            await removeOldMedia(tempImages, 'images', sql);
+            await removeOldMedia(tempVideos, 'videos', sql);
         }
 
-        // Extract images and videos url from the request if they exist
-        if (newImage) {
-            const images = newImage.map(file => ({ url: file.path, album_id: updatedPost[0].album_id, post_id: updatedPost[0].id }));
-            await sql`INSERT INTO images ${sql(images)}`;
-        }
-        if (newVideo) {
-            const videos = newVideo.map(file => ({ title: file.originalname, description: "", url: file.path, album_id: updatedPost[0].album_id, post_id: updatedPost[0].id }));
-            await sql`INSERT INTO videos ${sql(videos)}`;
-        }
+        // Insert new media files into the database
+        await insertMediaFiles(sql, files, updatedPost[0].id, updatedPost[0].album_id);
 
         // Remove tmp directory if it exists
-        if (fs.existsSync(path.join(__dirname, '../uploads/tmp'))) {
-            fs.rmSync(path.join(__dirname, '../uploads/tmp'), { recursive: true });
+        if (fs.existsSync(tmpUploadsPath)) {
+            fs.rmSync(tmpUploadsPath, { recursive: true });
         }
+
+        const post = await getPost(post_id);
+
+        res.status(200).json({
+            message: "Post updated successfully",
+            data: post
+        });
 
     } catch (error) {
         console.error("[INFO] Error updating post:", error);
@@ -327,61 +293,24 @@ module.exports.editPost = async (req, res) => {
         }
 
         // Revert the post and its media files to the previous state
-        const revertedPost = await sql`UPDATE posts SET title= ${post[0].title}, content = ${post[0].content}, event_date = ${post[0].event_date}, album_id = ${album_id} WHERE id = ${post_id} RETURNING * `;
+        await sql`UPDATE posts SET title= ${post[0].title}, content = ${post[0].content}, event_date = ${post[0].event_date}, album_id = ${album_id} WHERE id = ${post_id} RETURNING * `;
         await sql`UPDATE images SET album_id = ${album_id} WHERE post_id = ${post_id}`;
         await sql`UPDATE videos SET album_id = ${album_id} WHERE post_id = ${post_id}`;
 
         // Restore old images and videos from the temporary folder
-        for (const image of tempImages) {
-            const url = image.url;
-
-            // Check if the file exists in the uploads/images directory, if not copy it from the temporary folder
-            // and remove it from the temporary folder
-            if (!fs.existsSync(url)) {
-                const baseName = path.basename(url);
-                const source = path.join('uploads/tmp/', baseName);
-                const destination = path.join(process.cwd(), 'uploads/images/', baseName);
-                fs.copyFileSync(source, destination); // Copy the file from the temporary folder to the original location
-                fs.unlinkSync(source); // Remove the file from the temporary folder
-            }
-
-            // Check if the image exists in the database, if not insert it
-            const isExistInDB = await sql`SELECT * FROM images WHERE id = ${image.id}`;
-            if (!isExistInDB[0]) {
-                await sql`INSERT INTO images (id, url, album_id, post_id, created_at) VALUES (${image.id}, ${image.url}, ${album_id}, ${post_id}, ${image.created_at})`;
-            }
-        }
-
-        for (const video of tempVideos) {
-            const url = video.url;
-
-            // Check if the file exists in the uploads/videos directory, if not copy it from the temporary folder
-            // and remove it from the temporary folder
-            if (!fs.existsSync(url)) {
-                const baseName = path.basename(url);
-                const source = path.join('uploads/tmp/', baseName);
-                const destination = path.join(process.cwd(), 'uploads/videos/', baseName);
-                fs.copyFileSync(source, destination); // Copy the file from the temporary folder to the original location
-                fs.unlinkSync(source); // Remove the file from the temporary folder
-            }
-
-            // Check if the video exists in the database, if not insert it
-            const isExistInDB = await sql`SELECT * FROM videos WHERE id = ${video.id}`;
-            if (!isExistInDB[0]) {
-                await sql`INSERT INTO videos (id, title, description, url, album_id, post_id, event_date, created_at) VALUES (${video.id}, ${video.title}, ${video.description}, ${video.url}, ${album_id}, ${post_id}, ${video.event_date}, ${video.created_at})`;
-            }
-        }
+        await restoreMediaFiles(tempImages, 'images', sql, post_id, album_id);
+        await restoreMediaFiles(tempVideos, 'videos', sql, post_id, album_id);
 
         // Remove uploaded files in case of error
-        if (newImage && newImage.length > 0) {
-            removeFiles(newImage.map(file => file.path));
-        } else if (newVideo && newVideo.length > 0) {
-            removeFiles(newVideo.map(file => file.path));
+        if (files.image && files.image.length > 0) {
+            removeFiles(files.image.map(file => file.path));
+        } else if (files.video && files.video.length > 0) {
+            removeFiles(files.video.map(file => file.path));
         }
 
         // Remove tmp directory if it exists
-        if (fs.existsSync(path.join(__dirname, '../uploads/tmp'))) {
-            fs.rmSync(path.join(__dirname, '../uploads/tmp'), { recursive: true });
+        if (fs.existsSync(tmpUploadsPath)) {
+            fs.rmSync(tmpUploadsPath, { recursive: true });
         }
 
         return res.status(500).json({
@@ -389,14 +318,4 @@ module.exports.editPost = async (req, res) => {
             error: error
         });
     }
-
-
-
-
-    res.status(500).json({
-        message: "Edit post functionality is not implemented yet."
-    });
-
-
-
 };

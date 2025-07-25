@@ -6,6 +6,7 @@ import { useLocation } from "react-router-dom";
 import AddButton from '../../components/dashboard/Buttons/AddButton.jsx';
 import AddPostOverlay from '../../components/dashboard/AddPostOverlay.jsx';
 import ErrorAlert from '../../components/dashboard/ErrorAlert.jsx';
+import SuccessAlert from '../../components/dashboard/SuccessAlert.jsx';
 import Table from '../../components/dashboard/Table.jsx';
 import DatePicker from '../../components/dashboard/DatePicker.jsx';
 import FilterPanel from '../../components/dashboard/FilterPanel.jsx';
@@ -31,6 +32,7 @@ function DashboardPosts() {
     const [posts, setPosts] = useState({ posts: [], fetchedLength: 0 });
     const [columns, setColumns] = useState([]);
     const [error, setError] = useState(null);
+    const [successMessage, setSuccessMessage] = useState(null);
     const [filter, setFilter] = useState(state ? state : {
         searchKeyword: "",
         eventDate: "",
@@ -126,6 +128,10 @@ function DashboardPosts() {
                 error && <ErrorAlert error={error} setError={setError} />
             }
 
+            {/* Success Box */}
+            {
+                successMessage && <SuccessAlert successMessage={successMessage} setSuccessMessage={setSuccessMessage} />
+            }
 
             {/* Filters */}
             <div className="flex items-center w-full text-gray-500 gap-5">
@@ -184,8 +190,7 @@ function DashboardPosts() {
                                 orderBy={filter.orderBy}
                                 setFilter={setFilter}
                                 columns={columns}
-                                state={{ ...filter }}
-                                navigateRoute="/admin/posts"
+                                state={{ ...filter, message: "" }}
                             />
 
                             {/* Pagination */}
@@ -213,7 +218,7 @@ function DashboardPosts() {
             <AddButton onClick={() => { setShowAddOverlay(!showAddOverlay) }} />
             {
                 showAddOverlay && (
-                    <AddPostOverlay setShowAddPanel={setShowAddOverlay} editorDraft={editorDraft} setEditorDraft={setEditorDraft} setError={setError} />
+                    <AddPostOverlay setShowAddPanel={setShowAddOverlay} editorDraft={editorDraft} setEditorDraft={setEditorDraft} setError={setError} state={{ ...filter }} />
                 )
             }
         </div >

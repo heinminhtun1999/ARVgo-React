@@ -1,5 +1,5 @@
 // React Router Dom
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 
 
 // React Icons
@@ -7,9 +7,10 @@ import { FaSortAmountDown } from "react-icons/fa";
 import { FaSortAmountUp } from "react-icons/fa";
 import { MdDeleteForever } from "react-icons/md";
 
-function Table({ data, orderBy, columns, state, navigateRoute, setFilter }) {
+function Table({ data, orderBy, columns, state, setFilter }) {
 
     const navigate = useNavigate();
+    const location = useLocation();
 
     // Empty Data Handling
     if (data.length == 0) return (
@@ -70,7 +71,7 @@ function Table({ data, orderBy, columns, state, navigateRoute, setFilter }) {
 
             <tr key={i}
                 className={`cursor-pointer text-gray-700 font-semibold border-b-1 border-gray-200 last:border-b-0 hover:bg-primary-green-50 even:bg-gray-50 border-x-1 select-none`}
-                onClick={() => navigate(`${navigateRoute}/${d.id}`, { state: JSON.stringify(state) })}>
+                onClick={() => navigate(`${location.pathname}/${d.id}`, { state: JSON.stringify(state) })}>
                 {
                     columns.map((c, c_i) => {
                         return (
